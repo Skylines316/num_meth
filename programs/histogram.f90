@@ -22,7 +22,7 @@ real function normal(x, sigma, xo) result(y)
   real :: x
   real, intent(in) :: xo, sigma
   real, parameter :: pi = 4.0*atan(1.0)
-  y = (1/sqrt(2*sigma**2*pi))*exp(-0.5*(x-xo)**2/sigma**2)
+  y = (1/sqrt(2*sigma**2*pi))*exp(-0.5*((x-xo)/sigma)**2)
 end function normal
 
 real function g(x) result (y)
@@ -42,6 +42,7 @@ subroutine rejection (x,n)
   !generate 10000 random numbers
   do while (i<= n)
     call random_number(s)
+    s=-10+(10+10)*s
     call random_number(r)
     !print *,g(s)
     if (r < g(s)/0.5) then
@@ -51,16 +52,6 @@ subroutine rejection (x,n)
     end if
   end do
 end subroutine rejection
-
-subroutine new_interval(x,n,a,b)
-  implicit none
-  integer :: n, i
-  real :: a,b
-  real, dimension(n) :: x
-  do i=1,n
-    x(i) = a+(b-a)*x(i)
-  end do
-end subroutine new_interval
 
 real function delta_x(x, n) result(delta)
   implicit none
@@ -75,18 +66,21 @@ integer function n_bins(x,d,delta) result(n)
   integer :: d
   real :: x(d)
   real :: delta
-  n = floor((x(1)-x(n))/delta)+1
+  n = floor((x(d)-x(1))/delta)+1
 end function n_bins
 
 program density
   implicit none
   integer :: n
   integer, allocatable :: seed(:) 
-  real :: r
-  integer :: numbers 
+  real :: r,delta, H_all
+  integer :: numbers, bins
   real, dimension(:), allocatable :: x
+  real, dimension(:), allocatable :: H
+  real, dimension(:), allocatable :: t
   real, external :: delta_x
-  integer :: ac2=0,ac4=0,ac6=0,ac8=0,ac10=0,i
+  integer, external :: n_bins
+  integer :: ac2=0,ac4=0,ac6=0,ac8=0,ac10=0,i,j
 
   numbers=5000
   allocate(x(numbers))
@@ -96,11 +90,35 @@ program density
   seed = 123456
   call random_seed(put=seed)
   deallocate(seed)
-  
   call rejection(x,numbers)
-  call new_interval(x,numbers,-10.0,10.0)
   call bubble(x,numbers)
-  print *, delta_x(x,numbers)
+  open(20, file='data1.csv', status='replace')
+  do i=1,numbers
+    write(20,*) x(i), i*1.0/numbers
+  end do
+  close(20)
+  delta = delta_x(x,numbers)
+  print *, delta
+  bins=n_bins(x,numbers,delta_x(x,numbers))
+  print *, bins
+  allocate(H(bins), t(bins))
+  H=0
+  do i=1,numbers
+    j = floor((x(i)-x(1))/delta)
+    !print *, j
+    H(j) = H(j) + 1
+  end do
+  H_all=sum(H)
+  open(10, file='hist.csv',status='replace')
+  
+  do i=1,bins
+    H(i)=H(i)/(delta*H_all)
+    t(i)=x(1)+(i-0.5)*delta
+    write (10,*) t(i), H(i)
+  end do
+  close(10)
+  print *, sum(H)*delta
+  !print *, H
   !print '(f8.3)', x
   ! do i=1,numbers
   !   if (x(i)<0.2) then
